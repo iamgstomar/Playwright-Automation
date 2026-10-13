@@ -1,0 +1,46 @@
+# ============================================================
+#  QA AUTOMATION CONFIG
+#  Fill in the values below once your test environment is ready.
+#  Do NOT commit this file with real credentials to a public repo.
+# ============================================================
+
+environment:
+  # For the Department module tests, the base URL is the actual module route.
+  # Keep this as a single source of truth for the module being executed.
+  base_url: "https://twowayserver.future-club.com/dictionary/department"
+
+  # Optional app prefix retained for compatibility with other deployments.
+  app_path: ""
+
+  # Login URL for the app.
+  login_url: "https://twowayserver.future-club.com/login"
+
+  # Backward-compatible alias used by older fixtures.
+  login_path: "/login"
+
+credentials:
+  # The test/QA account the automation will log in with.
+  # Use a dedicated test account, not a real admin's personal login.
+  username: "abidhussainansari"
+  password: "Abid@FCC123"
+
+  # If your app has a separate AD username used for "Add AD User" tests
+  ad_test_username: "abidhussainansari"
+
+browser:
+  # chromium | firefox | webkit
+  type: "chromium"
+  # Run with a visible browser window (false) or in the background (true)
+  headless: false
+  # Slows down each action by this many milliseconds - useful while building/debugging tests
+  slow_mo: 150
+  # Default timeout (ms) for waiting on elements/pages
+  timeout: 15000
+
+reporting:
+  # Absolute path to the QA workbook — change only this line if the file moves
+  excel_path: "D:/Documents/Learning/MyApps/KUAutomation/QA_Test_Cases.xlsx"
+  # Screenshots saved here, organised by module sub-folder
+  screenshot_on_failure: true
+  screenshot_dir: "D:/Documents/Learning/MyApps/KUAutomation/screenshots"
+  video_on_failure: false   # set true to record video and attach to Allure on failure

@@ -17,13 +17,19 @@ Live DOM facts (from inspect_dept_page.py):
   - NO filter panel / NO selects exist on this page
 """
 import time
+
 import pytest
+
 import allure
+
 from playwright.sync_api import Page, expect
 
 from conftest import _normalize_base_url, ensure_logged_in
 
-EPIC    = "Puffin Broadcast Platform"
+pytestmark = pytest.mark.departments
+
+EPIC = "Puffin Broadcast Platform"
+
 FEATURE = "Dictionaries — Departments"
 
 
