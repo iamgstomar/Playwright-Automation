@@ -1,16 +1,3 @@
-// ============================================================
-//  Jenkinsfile — Puffin QA Automation Pipeline
-//
-//  Prerequisites on Jenkins agent:
-//    - Python 3.10+
-//    - Java 11+ (for Allure CLI)
-//    - Allure Jenkins Plugin installed
-//    - Git
-//
-//  Jenkins credentials needed:
-//    - qa-config-yaml  : Secret File — your config/config.yaml
-//    - qa-excel        : Secret File — your QA_Test_Cases.xlsx
-// ============================================================
 
 pipeline {
 
@@ -18,19 +5,21 @@ pipeline {
 
     parameters {
         choice(
-            name:        'MODULE',
-            choices:     ['Departments', 'Login', 'ALL'],
+            name: 'MODULE',
+            choices: ['Departments', 'Login', 'ALL'],
             description: 'Which module to test'
         )
+
         string(
-            name:        'LABEL',
+            name: 'LABEL',
             defaultValue: '',
-            description: 'Build label shown in Allure Trend (e.g. Sprint 3). Leave blank for auto.'
+            description: 'Build label shown in Allure Trend. Leave blank for auto.'
         )
+
         booleanParam(
-            name:         'REPORT_ONLY',
+            name: 'REPORT_ONLY',
             defaultValue: false,
-            description:  'Skip pytest — only regenerate Allure report from Excel'
+            description: 'Skip pytest and regenerate report from Excel'
         )
     }
 
@@ -47,7 +36,7 @@ pipeline {
     }
 
     triggers {
-        // Nightly run at 2am — comment out if not needed
+        // Runs nightly at 2 AM according to Jenkins timezone
         cron('0 2 * * *')
     }
 
@@ -61,77 +50,125 @@ pipeline {
 
         stage('Setup') {
             steps {
-                // Inject secret config and Excel from Jenkins credentials
+                echo 'Setting up Python environment and QA files'
+
                 withCredentials([
-                    file(credentialsId: 'qa-config-yaml', variable: 'CONFIG_FILE'),
-                    file(credentialsId: 'qa-excel',       variable: 'EXCEL_FILE')
+                    file(
+                        credentialsId: 'qa-config-yaml',
+                        variable: 'CONFIG_FILE'
+                    ),
+                    file(
+                        credentialsId: 'qa-excel',
+                        variable: 'EXCEL_FILE'
+                    )
                 ]) {
-                    sh 'cp "$CONFIG_FILE" config/config.yaml'
-                    sh 'cp "$EXCEL_FILE"  QA_Test_Cases.xlsx'
+                    bat '''
+                        if not exist "config" mkdir "config"
+
+                        copy /Y "%CONFIG_FILE%" "config\\config.yaml"
+                        if errorlevel 1 exit /b 1
+
+                        copy /Y "%EXCEL_FILE%" "QA_Test_Cases.xlsx"
+                        if errorlevel 1 exit /b 1
+                    '''
                 }
 
-                sh '''
-                    python3 -m venv ${VENV_DIR}
-                    . ${VENV_DIR}/bin/activate
-                    pip install --quiet -r requirements.txt
-                    playwright install chromium
+                bat '''
+                    python --version
+                    if errorlevel 1 exit /b 1
+
+                    if not exist "%VENV_DIR%\\Scripts\\python.exe" (
+                        python -m venv "%VENV_DIR%"
+                        if errorlevel 1 exit /b 1
+                    )
+
+                    "%VENV_DIR%\\Scripts\\python.exe" -m pip install --upgrade pip
+                    if errorlevel 1 exit /b 1
+
+                    "%VENV_DIR%\\Scripts\\python.exe" -m pip install --quiet -r requirements.txt
+                    if errorlevel 1 exit /b 1
+
+                    "%VENV_DIR%\\Scripts\\python.exe" -m playwright install chromium
+                    if errorlevel 1 exit /b 1
                 '''
             }
         }
 
-stage('Run Tests') {
-    when {
-        expression { return !params.REPORT_ONLY }
-    }
-    steps {
-        bat '''
-            call "%VENV_DIR%\\Scripts\\activate.bat"
-            if errorlevel 1 exit /b 1
+        stage('Run Tests') {
+            when {
+                expression {
+                    return !params.REPORT_ONLY
+                }
+            }
 
-            if /I "%MODULE%"=="ALL" (
-                python -m pytest -v --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
-            ) else (
-                for /f %%M in ('powershell -NoProfile -Command "$env:MODULE.ToLower()"') do set "MODULE_LOWER=%%M"
-                python -m pytest -v --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3 -m "%MODULE_LOWER%"
-            )
-        '''
-    }
-    post {
-        always {
-            // Always write Excel results even if some tests failed
-            bat '''
-                call "%VENV_DIR%\\Scripts\\activate.bat"
-                if errorlevel 1 exit /b 1
-                python tools/excel_to_allure.py --all --label "%LABEL%"
-            '''
+            steps {
+                echo 'Running Playwright automation tests'
+
+                bat '''
+                    if not exist "%ALLURE_RESULTS%" (
+                        mkdir "%ALLURE_RESULTS%"
+                    )
+
+                    if /I "%MODULE%"=="ALL" (
+                        "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
+                    ) else (
+                        "%VENV_DIR%\\Scripts\\python.exe" -c "print('Selected module: %MODULE%')"
+                        "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3 -m "%MODULE%"
+                    )
+                '''
+            }
+
+            post {
+                always {
+                    echo 'Updating Excel test results'
+
+                    bat '''
+                        if exist "%VENV_DIR%\\Scripts\\python.exe" (
+                            "%VENV_DIR%\\Scripts\\python.exe" tools\\excel_to_allure.py --all --label "%LABEL%"
+                        ) else (
+                            echo Python virtual environment not found. Excel update skipped.
+                        )
+                    '''
+                }
+            }
         }
-    }
-}
 
         stage('Report Only') {
             when {
-                expression { return params.REPORT_ONLY }
+                expression {
+                    return params.REPORT_ONLY
+                }
             }
+
             steps {
-                sh '''
-                    . ${VENV_DIR}/bin/activate
-                    if [ "${MODULE}" = "ALL" ]; then
-                        python tools/excel_to_allure.py --all --label "${LABEL}"
-                    else
-                        python tools/excel_to_allure.py --sheet "${MODULE}" --label "${LABEL}"
-                    fi
+                echo 'Generating report without executing tests'
+
+                bat '''
+                    if not exist "%VENV_DIR%\\Scripts\\python.exe" (
+                        echo ERROR: Python virtual environment not found.
+                        exit /b 1
+                    )
+
+                    if /I "%MODULE%"=="ALL" (
+                        "%VENV_DIR%\\Scripts\\python.exe" tools\\excel_to_allure.py --all --label "%LABEL%"
+                    ) else (
+                        "%VENV_DIR%\\Scripts\\python.exe" tools\\excel_to_allure.py --sheet "%MODULE%" --label "%LABEL%"
+                    )
+
+                    if errorlevel 1 exit /b 1
                 '''
             }
         }
 
         stage('Publish Report') {
             steps {
-                // Allure Jenkins Plugin — renders report inside Jenkins
+                echo 'Publishing Allure report in Jenkins'
+
                 allure([
                     includeProperties: true,
-                    jdk:               '',
-                    results:           [[path: "${ALLURE_RESULTS}"]],
-                    report:            "${ALLURE_REPORT}",
+                    jdk: '',
+                    results: [[path: "${ALLURE_RESULTS}"]],
+                    report: "${ALLURE_REPORT}",
                     reportBuildPolicy: 'ALWAYS'
                 ])
             }
@@ -141,29 +178,43 @@ stage('Run Tests') {
     post {
         failure {
             emailext(
-                subject: "FAILED: Puffin QA — ${params.MODULE} — Build #${BUILD_NUMBER}",
-                body:    """
+                subject: "FAILED: Puffin QA - ${params.MODULE} - Build #${BUILD_NUMBER}",
+                body: """
                     Build #${BUILD_NUMBER} FAILED.
-                    Module : ${params.MODULE}
-                    Console: ${BUILD_URL}console
-                    Report : ${BUILD_URL}allure/
+
+                    Module: ${params.MODULE}
+
+                    Console Output:
+                    ${BUILD_URL}console
+
+                    Allure Report:
+                    ${BUILD_URL}allure/
                 """,
                 to: '$DEFAULT_RECIPIENTS'
             )
         }
+
         success {
             emailext(
-                subject: "PASSED: Puffin QA — ${params.MODULE} — Build #${BUILD_NUMBER}",
-                body:    """
+                subject: "PASSED: Puffin QA - ${params.MODULE} - Build #${BUILD_NUMBER}",
+                body: """
                     Build #${BUILD_NUMBER} PASSED.
-                    Module : ${params.MODULE}
-                    Report : ${BUILD_URL}allure/
+
+                    Module: ${params.MODULE}
+
+                    Allure Report:
+                    ${BUILD_URL}allure/
                 """,
                 to: '$DEFAULT_RECIPIENTS'
             )
         }
+
         always {
-            cleanWs(patterns: [[pattern: 'venv/**', type: 'INCLUDE']])
+            cleanWs(
+                patterns: [
+                    [pattern: 'venv/**', type: 'INCLUDE']
+                ]
+            )
         }
     }
 }
