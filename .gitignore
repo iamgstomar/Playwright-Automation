@@ -1,0 +1,48 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Credentials — NEVER commit real config
+# config/config.yaml   ← uncomment this once you have a config.example.yaml
+
+# Allure — generated output, not source
+allure-results/
+allure-report/
+
+# Screenshots — runtime artifacts
+screenshots/
+
+# Excel results — source of truth but contains test data, keep locally
+# QA_Test_Cases.xlsx   ← uncomment if you don't want Excel in Git
+
+# Playwright
+test-results/
+playwright-report/
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Logs / debug
+*.log
+debug_login_output.txt
+pytest_debug.txt
+INFO.txt
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Allure CLI binary — too large for Git
+allure/
+allure-2.30.0.zip

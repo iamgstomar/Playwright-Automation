@@ -1,0 +1,70 @@
+# ============================================================
+#  TEST DATA — single source of truth for all test modules
+#  Edit values here; tests read from this file via conftest.py
+# ============================================================
+
+departments:
+  valid:
+    english_name: "QA Test Department"
+    arabic_name:  "قسم اختبار الجودة"
+    value:        "QA-DEPT-001"
+  duplicate:
+    english_name: "QA Test Department"   # same as valid — used for duplicate tests
+    arabic_name:  "قسم اختبار الجودة"
+    value:        "QA-DEPT-001"
+  special_chars:
+    english_name: "Dept @#$%"
+    arabic_name:  "قسم @#$%"
+    value:        "SPEC-001"
+  long_name:
+    english_name: "A"                    # repeated 300x in test
+    arabic_name:  "أ"
+    value:        "LONG-001"
+  min_length:
+    value: "AB"                          # 2 chars — triggers min-length validation
+  search:
+    existing_term:    "QA Test"
+    nonexistent_term: "ZZZNOMATCH999"
+    partial_term:     "QA"
+
+login:
+  valid:
+    username: "abidhussainansari"
+    password: "Abid@FCC123"
+  invalid:
+    username: "wronguser@test.com"
+    password: "WrongPass123"
+  locked:
+    username: "lockeduser@test.com"
+    password: "AnyPass123"
+  ad_user:
+    username: "abidhussainansari"
+
+credits:
+  add_amount:    500
+  remove_amount: 100
+  max_amount:    999999
+  min_amount:    1
+  invalid_text:  "abc"
+
+users:
+  new_user:
+    username:  "qa.testuser"
+    email:     "qa.testuser@example.com"
+    role:      "Viewer"
+  admin_user:
+    username:  "qa.adminuser"
+    email:     "qa.adminuser@example.com"
+    role:      "Admin"
+
+broadcast:
+  sms:
+    title:    "QA SMS Test"
+    message:  "This is an automated QA test message."
+    schedule: "2026-12-01 10:00"
+  push:
+    title:    "QA Push Test"
+    body:     "Automated push notification test."
+  inbox:
+    title:    "QA Inbox Test"
+    body:     "Automated inbox message test."

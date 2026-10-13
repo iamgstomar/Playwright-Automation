@@ -1,0 +1,26 @@
+# ============================================================
+#  Copy this file to config/config.yaml and fill in your values.
+#  NEVER commit config.yaml with real credentials.
+# ============================================================
+
+environment:
+  base_url:   "https://<YOUR-SERVER>/dictionary/department"
+  app_path:   ""
+  login_url:  "https://<YOUR-SERVER>/login"
+  login_path: "/login"
+
+credentials:
+  username:        "<QA_USERNAME>"
+  password:        "<QA_PASSWORD>"
+  ad_test_username: "<AD_USERNAME>"
+
+browser:
+  type:     "chromium"   # chromium | firefox | webkit
+  headless: false
+  slow_mo:  150
+  timeout:  15000
+
+reporting:
+  excel_path:           "D:/path/to/QA_Test_Cases.xlsx"
+  screenshot_on_failure: true
+  screenshot_dir:       "D:/path/to/screenshots"
