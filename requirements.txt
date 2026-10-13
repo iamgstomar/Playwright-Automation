@@ -5,3 +5,4 @@ pyyaml
 openpyxl
 allure-pytest==2.16.2
 pytest-rerunfailures
+pytest-timeout
