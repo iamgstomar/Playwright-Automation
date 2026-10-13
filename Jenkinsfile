@@ -1,6 +1,5 @@
 
 pipeline {
-
     agent any
 
     parameters {
@@ -9,13 +8,11 @@ pipeline {
             choices: ['Departments', 'Login', 'ALL'],
             description: 'Which module to test'
         )
-
         string(
             name: 'LABEL',
             defaultValue: '',
             description: 'Build label shown in Allure Trend. Leave blank for auto.'
         )
-
         booleanParam(
             name: 'REPORT_ONLY',
             defaultValue: false,
@@ -37,12 +34,10 @@ pipeline {
     }
 
     triggers {
-        // Runs nightly at 2 AM according to Jenkins timezone
         cron('0 2 * * *')
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
@@ -54,14 +49,8 @@ pipeline {
                 echo 'Setting up Python environment and QA files'
 
                 withCredentials([
-                    file(
-                        credentialsId: 'qa-config-yaml',
-                        variable: 'CONFIG_FILE'
-                    ),
-                    file(
-                        credentialsId: 'qa-excel',
-                        variable: 'EXCEL_FILE'
-                    )
+                    file(credentialsId: 'qa-config-yaml', variable: 'CONFIG_FILE'),
+                    file(credentialsId: 'qa-excel', variable: 'EXCEL_FILE')
                 ]) {
                     bat '''
                         if not exist "config" mkdir "config"
@@ -75,18 +64,13 @@ pipeline {
                 }
 
                 bat '''
-                    echo Checking Python installation...
-
                     if not exist "%PYTHON_EXE%" (
-                        echo ERROR: Python executable not found.
-                        echo Expected path: %PYTHON_EXE%
+                        echo ERROR: Python executable not found: %PYTHON_EXE%
                         exit /b 1
                     )
 
                     "%PYTHON_EXE%" --version
                     if errorlevel 1 exit /b 1
-
-                    echo Checking virtual environment...
 
                     if not exist "%VENV_DIR%\\Scripts\\python.exe" (
                         "%PYTHON_EXE%" -m venv "%VENV_DIR%"
@@ -96,17 +80,11 @@ pipeline {
                     "%VENV_DIR%\\Scripts\\python.exe" --version
                     if errorlevel 1 exit /b 1
 
-                    echo Upgrading pip...
-
                     "%VENV_DIR%\\Scripts\\python.exe" -m pip install --upgrade pip
                     if errorlevel 1 exit /b 1
 
-                    echo Installing project dependencies...
-
-                    "%VENV_DIR%\\Scripts\\python.exe" -m pip install --quiet -r requirements.txt
+                    "%VENV_DIR%\\Scripts\\python.exe" -m pip install -r requirements.txt
                     if errorlevel 1 exit /b 1
-
-                    echo Installing Playwright Chromium...
 
                     "%VENV_DIR%\\Scripts\\python.exe" -m playwright install chromium
                     if errorlevel 1 exit /b 1
@@ -118,42 +96,43 @@ pipeline {
 
         stage('Run Tests') {
             when {
-                expression {
-                    return !params.REPORT_ONLY
-                }
+                expression { return !params.REPORT_ONLY }
             }
 
             steps {
-                echo 'Running Playwright automation tests'
+                echo "Running tests for module: ${params.MODULE}"
 
                 bat '''
-                    if not exist "%ALLURE_RESULTS%" (
-                        mkdir "%ALLURE_RESULTS%"
-                    )
+                    if not exist "%ALLURE_RESULTS%" mkdir "%ALLURE_RESULTS%"
 
                     if /I "%MODULE%"=="ALL" (
-                        "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
-                        exit /b %errorlevel%
-                    ) else (
-                        "%VENV_DIR%\\Scripts\\python.exe" -c "print('Selected module: %MODULE%')"
+                        "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%"
                         if errorlevel 1 exit /b 1
-
-                        "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3 -m "%MODULE%"
-                        exit /b %errorlevel%
+                    ) else if /I "%MODULE%"=="Departments" (
+                        "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%" -m "departments"
+                        if errorlevel 1 exit /b 1
+                    ) else if /I "%MODULE%"=="Login" (
+                        "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%" -m "login"
+                        if errorlevel 1 exit /b 1
+                    ) else (
+                        echo ERROR: Unsupported module "%MODULE%"
+                        exit /b 1
                     )
                 '''
             }
 
             post {
                 always {
-                    echo 'Updating Excel test results'
+                    echo 'Generating Allure results from the Excel test data'
 
                     bat '''
-                        if exist "%VENV_DIR%\\Scripts\\python.exe" (
-                            "%VENV_DIR%\\Scripts\\python.exe" tools\\excel_to_allure.py --all --label "%LABEL%"
-                        ) else (
-                            echo Python virtual environment not found. Excel update skipped.
+                        if not exist "%VENV_DIR%\\Scripts\\python.exe" (
+                            echo ERROR: Python virtual environment not found.
+                            exit /b 1
                         )
+
+                        "%VENV_DIR%\\Scripts\\python.exe" tools\\excel_to_allure.py --all --label "%LABEL%"
+                        if errorlevel 1 exit /b 1
                     '''
                 }
             }
@@ -161,9 +140,7 @@ pipeline {
 
         stage('Report Only') {
             when {
-                expression {
-                    return params.REPORT_ONLY
-                }
+                expression { return params.REPORT_ONLY }
             }
 
             steps {
@@ -177,11 +154,17 @@ pipeline {
 
                     if /I "%MODULE%"=="ALL" (
                         "%VENV_DIR%\\Scripts\\python.exe" tools\\excel_to_allure.py --all --label "%LABEL%"
+                        if errorlevel 1 exit /b 1
+                    ) else if /I "%MODULE%"=="Departments" (
+                        "%VENV_DIR%\\Scripts\\python.exe" tools\\excel_to_allure.py --sheet "Departments" --label "%LABEL%"
+                        if errorlevel 1 exit /b 1
+                    ) else if /I "%MODULE%"=="Login" (
+                        "%VENV_DIR%\\Scripts\\python.exe" tools\\excel_to_allure.py --sheet "Login" --label "%LABEL%"
+                        if errorlevel 1 exit /b 1
                     ) else (
-                        "%VENV_DIR%\\Scripts\\python.exe" tools\\excel_to_allure.py --sheet "%MODULE%" --label "%LABEL%"
+                        echo ERROR: Unsupported module "%MODULE%"
+                        exit /b 1
                     )
-
-                    if errorlevel 1 exit /b 1
                 '''
             }
         }
@@ -206,16 +189,15 @@ pipeline {
             emailext(
                 subject: "FAILED: Puffin QA - ${params.MODULE} - Build #${BUILD_NUMBER}",
                 body: """
-                    Build #${BUILD_NUMBER} FAILED.
+Build #${BUILD_NUMBER} FAILED.
+Module: ${params.MODULE}
 
-                    Module: ${params.MODULE}
+Console Output:
+${BUILD_URL}console
 
-                    Console Output:
-                    ${BUILD_URL}console
-
-                    Allure Report:
-                    ${BUILD_URL}allure/
-                """,
+Allure Report:
+${BUILD_URL}allure/
+""",
                 to: '$DEFAULT_RECIPIENTS'
             )
         }
@@ -224,13 +206,12 @@ pipeline {
             emailext(
                 subject: "PASSED: Puffin QA - ${params.MODULE} - Build #${BUILD_NUMBER}",
                 body: """
-                    Build #${BUILD_NUMBER} PASSED.
+Build #${BUILD_NUMBER} PASSED.
+Module: ${params.MODULE}
 
-                    Module: ${params.MODULE}
-
-                    Allure Report:
-                    ${BUILD_URL}allure/
-                """,
+Allure Report:
+${BUILD_URL}allure/
+""",
                 to: '$DEFAULT_RECIPIENTS'
             )
         }
