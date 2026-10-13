@@ -79,28 +79,34 @@ pipeline {
             }
         }
 
-        stage('Run Tests') {
-            when {
-                expression { return !params.REPORT_ONLY }
-            }
-            steps {
-                sh '''
-                    . ${VENV_DIR}/bin/activate
-                    if [ "${MODULE}" = "ALL" ]; then
-                        pytest -v --alluredir=${ALLURE_RESULTS} --reruns 2 --reruns-delay 3
-                    else
-                        pytest -v --alluredir=${ALLURE_RESULTS} --reruns 2 --reruns-delay 3 \
-                               -m "$(echo ${MODULE} | tr '[:upper:]' '[:lower:]')"
-                    fi
-                '''
-            }
-            post {
-                always {
-                    // Always write Excel results even if some tests failed
-                    sh '. ${VENV_DIR}/bin/activate && python tools/excel_to_allure.py --all --label "${LABEL}"'
-                }
-            }
+stage('Run Tests') {
+    when {
+        expression { return !params.REPORT_ONLY }
+    }
+    steps {
+        bat '''
+            call "%VENV_DIR%\\Scripts\\activate.bat"
+            if errorlevel 1 exit /b 1
+
+            if /I "%MODULE%"=="ALL" (
+                python -m pytest -v --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
+            ) else (
+                for /f %%M in ('powershell -NoProfile -Command "$env:MODULE.ToLower()"') do set "MODULE_LOWER=%%M"
+                python -m pytest -v --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3 -m "%MODULE_LOWER%"
+            )
+        '''
+    }
+    post {
+        always {
+            // Always write Excel results even if some tests failed
+            bat '''
+                call "%VENV_DIR%\\Scripts\\activate.bat"
+                if errorlevel 1 exit /b 1
+                python tools/excel_to_allure.py --all --label "%LABEL%"
+            '''
         }
+    }
+}
 
         stage('Report Only') {
             when {
