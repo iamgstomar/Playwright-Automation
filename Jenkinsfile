@@ -27,6 +27,7 @@ pipeline {
         ALLURE_RESULTS = 'allure-results'
         ALLURE_REPORT  = 'allure-report'
         VENV_DIR       = 'venv'
+        PYTHON_EXE     = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'
     }
 
     options {
@@ -74,22 +75,43 @@ pipeline {
                 }
 
                 bat '''
-                    python --version
+                    echo Checking Python installation...
+
+                    if not exist "%PYTHON_EXE%" (
+                        echo ERROR: Python executable not found.
+                        echo Expected path: %PYTHON_EXE%
+                        exit /b 1
+                    )
+
+                    "%PYTHON_EXE%" --version
                     if errorlevel 1 exit /b 1
 
+                    echo Checking virtual environment...
+
                     if not exist "%VENV_DIR%\\Scripts\\python.exe" (
-                        python -m venv "%VENV_DIR%"
+                        "%PYTHON_EXE%" -m venv "%VENV_DIR%"
                         if errorlevel 1 exit /b 1
                     )
+
+                    "%VENV_DIR%\\Scripts\\python.exe" --version
+                    if errorlevel 1 exit /b 1
+
+                    echo Upgrading pip...
 
                     "%VENV_DIR%\\Scripts\\python.exe" -m pip install --upgrade pip
                     if errorlevel 1 exit /b 1
 
+                    echo Installing project dependencies...
+
                     "%VENV_DIR%\\Scripts\\python.exe" -m pip install --quiet -r requirements.txt
                     if errorlevel 1 exit /b 1
 
+                    echo Installing Playwright Chromium...
+
                     "%VENV_DIR%\\Scripts\\python.exe" -m playwright install chromium
                     if errorlevel 1 exit /b 1
+
+                    echo Python environment setup completed successfully.
                 '''
             }
         }
@@ -111,9 +133,13 @@ pipeline {
 
                     if /I "%MODULE%"=="ALL" (
                         "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
+                        exit /b %errorlevel%
                     ) else (
                         "%VENV_DIR%\\Scripts\\python.exe" -c "print('Selected module: %MODULE%')"
+                        if errorlevel 1 exit /b 1
+
                         "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3 -m "%MODULE%"
+                        exit /b %errorlevel%
                     )
                 '''
             }
