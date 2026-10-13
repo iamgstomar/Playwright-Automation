@@ -34,6 +34,7 @@ pipeline {
     }
 
     triggers {
+        // Runs nightly at 2 AM according to Jenkins timezone.
         cron('0 2 * * *')
     }
 
@@ -64,6 +65,8 @@ pipeline {
                 }
 
                 bat '''
+                    echo Checking Python installation...
+
                     if not exist "%PYTHON_EXE%" (
                         echo ERROR: Python executable not found: %PYTHON_EXE%
                         exit /b 1
@@ -72,19 +75,42 @@ pipeline {
                     "%PYTHON_EXE%" --version
                     if errorlevel 1 exit /b 1
 
-                    if not exist "%VENV_DIR%\\Scripts\\python.exe" (
-                        "%PYTHON_EXE%" -m venv "%VENV_DIR%"
+                    echo Recreating Python virtual environment...
+
+                    if exist "%VENV_DIR%" (
+                        rmdir /S /Q "%VENV_DIR%"
                         if errorlevel 1 exit /b 1
                     )
 
-                    "%VENV_DIR%\\Scripts\\python.exe" --version
+                    "%PYTHON_EXE%" -m venv "%VENV_DIR%"
                     if errorlevel 1 exit /b 1
+
+                    echo Repairing pip installation...
+
+                    "%VENV_DIR%\\Scripts\\python.exe" -m ensurepip --upgrade
+                    if errorlevel 1 exit /b 1
+
+                    echo Verifying pip...
+
+                    "%VENV_DIR%\\Scripts\\python.exe" -m pip --version
+                    if errorlevel 1 exit /b 1
+
+                    echo Upgrading pip...
 
                     "%VENV_DIR%\\Scripts\\python.exe" -m pip install --upgrade pip
                     if errorlevel 1 exit /b 1
 
+                    echo Installing project dependencies...
+
                     "%VENV_DIR%\\Scripts\\python.exe" -m pip install -r requirements.txt
                     if errorlevel 1 exit /b 1
+
+                    echo Verifying pytest installation...
+
+                    "%VENV_DIR%\\Scripts\\python.exe" -m pytest --version
+                    if errorlevel 1 exit /b 1
+
+                    echo Installing Playwright Chromium...
 
                     "%VENV_DIR%\\Scripts\\python.exe" -m playwright install chromium
                     if errorlevel 1 exit /b 1
@@ -123,7 +149,7 @@ pipeline {
 
             post {
                 always {
-                    echo 'Generating Allure results from the Excel test data'
+                    echo 'Updating Excel and generating Allure test results'
 
                     bat '''
                         if not exist "%VENV_DIR%\\Scripts\\python.exe" (
