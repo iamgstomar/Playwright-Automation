@@ -3,7 +3,7 @@
 <!-- Replace this banner with a real project screenshot or diagram if desired. -->
 # Playwright Automation
 
-### Excel-Driven UI Test Automation 路 Puffin Broadcast Platform
+### Excel-Driven UI Test Automation 路 Broadcast Platform
 
 **Reliable regression testing with Python, Playwright, Pytest, Jenkins, Excel & Allure**
 
@@ -82,7 +82,7 @@ flowchart LR
     A[Excel Test Cases] --> B[Python Test Suite]
     B --> C[Pytest]
     C --> D[Playwright]
-    D --> E[Puffin Web UI]
+    D --> E[Web UI]
     E --> F[Assertions and Results]
     F --> G[Excel Result Updates]
     F --> H[Allure Results]
