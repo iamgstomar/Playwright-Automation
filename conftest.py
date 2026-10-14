@@ -13,9 +13,21 @@ By module:
 Specific test cases:
     pytest -v -k "TC_DIC_002"
     pytest -v -k "TC_DIC_002 or TC_DIC_020"
+
+Optional config.yaml keys (all have safe defaults)
+--------------------------------------------------
+browser:
+  headless: true          # forced to true automatically under Jenkins
+  proxy: "http://host:port"   # only if the network needs one
+  login_timeout: 45000    # ms, used for the login navigation (default: max(timeout, 45000))
+
+Optional environment variables
+------------------------------
+SKIP_REACHABILITY_CHECK=1   # skip the fail-fast server check at session start
 """
 import os
 import re
+import socket
 import sys
 import time
 from urllib.parse import urlsplit, urlunsplit
@@ -42,6 +54,14 @@ EXCEL_PATH     = _CFG["reporting"]["excel_path"]
 SCREENSHOT_DIR = _CFG["reporting"]["screenshot_dir"]
 SCREENSHOT_ON  = _CFG["reporting"]["screenshot_on_failure"]
 VIDEO_ON       = _CFG["reporting"].get("video_on_failure", False)
+
+# Jenkins sets JENKINS_URL for every build
+RUNNING_IN_JENKINS = os.environ.get("JENKINS_URL") is not None
+
+# Abort the whole session after this many failed logins (stops endless reruns)
+MAX_LOGIN_FAILURES = 2
+_LOGIN_FAILURES = 0
+
 
 # ── URL helpers ───────────────────────────────────────────────────────────────
 
@@ -284,6 +304,14 @@ def _submit_login(page: Page, password_field, timeout: int) -> None:
         pass
 
 
+def _wait_idle(page: Page, timeout_ms: int) -> None:
+    """networkidle never fires on pages with websockets/polling — never let it fail a test."""
+    try:
+        page.wait_for_load_state("networkidle", timeout=timeout_ms)
+    except Exception:
+        pass
+
+
 # ── Session guard — re-login if session expired ──────────────────────────────
 
 def ensure_logged_in(pg: Page, config) -> None:
@@ -307,12 +335,14 @@ def _do_login(pg: Page, config) -> None:
       7. Raise a clear error if login still failed.
     """
     timeout = int(config["browser"]["timeout"])
+    # The first navigation is the slowest (cold start, DNS, TLS) — give it more room
+    nav_timeout = int(config["browser"].get("login_timeout", max(timeout, 45000)))
     dbg_dir = os.path.join(SCREENSHOT_DIR, "debug")
     os.makedirs(dbg_dir, exist_ok=True)
 
     # ── 1. Navigate ──────────────────────────────────────────────────────────
     login_url = _detect_login_url(pg, config)
-    pg.goto(login_url, wait_until="domcontentloaded", timeout=timeout)
+    pg.goto(login_url, wait_until="domcontentloaded", timeout=nav_timeout)
 
     # ── 2. Wait for the real form (SPA shell → actual inputs) ────────────────
     try:
@@ -335,7 +365,7 @@ def _do_login(pg: Page, config) -> None:
         # If the wait times out, try anyway — maybe the form is already there
         pass
 
-    pg.wait_for_load_state("networkidle", timeout=min(timeout, 10000))
+    _wait_idle(pg, min(timeout, 10000))
     pg.screenshot(path=os.path.join(dbg_dir, "1_login_page.png"), full_page=True)
     print(f"\n  [LOGIN] URL      : {pg.url}")
     print(f"  [LOGIN] Title    : {pg.title()}")
@@ -354,9 +384,9 @@ def _do_login(pg: Page, config) -> None:
 
     # ── 4. Fill fields ───────────────────────────────────────────────────────
     _fill_field(pg, username_field, config["credentials"]["username"])
-    print(f"  [LOGIN] Username filled")
+    print("  [LOGIN] Username filled")
     _fill_field(pg, password_field, config["credentials"]["password"])
-    print(f"  [LOGIN] Password filled")
+    print("  [LOGIN] Password filled")
 
     pg.screenshot(path=os.path.join(dbg_dir, "2_after_fill.png"), full_page=True)
 
@@ -365,7 +395,7 @@ def _do_login(pg: Page, config) -> None:
 
     # ── 5. Submit ────────────────────────────────────────────────────────────
     _submit_login(pg, password_field, timeout)
-    print(f"  [LOGIN] Submit triggered")
+    print("  [LOGIN] Submit triggered")
 
     # ── 6. Wait for redirect away from /login ────────────────────────────────
     try:
@@ -377,7 +407,7 @@ def _do_login(pg: Page, config) -> None:
         # URL didn't change — check if there's an error message on the page
         pass
 
-    pg.wait_for_load_state("networkidle", timeout=min(timeout, 10000))
+    _wait_idle(pg, min(timeout, 10000))
     pg.screenshot(path=os.path.join(dbg_dir, "3_after_login.png"), full_page=True)
     print(f"  [LOGIN] After-login URL: {pg.url}")
 
@@ -475,18 +505,37 @@ def _screenshot_path(tc_id: str, module: str) -> str:
 
 # ── Session start ─────────────────────────────────────────────────────────────
 
-import socket
-from urllib.parse import urlsplit
+def _check_server_reachable(cfg):
+    """Return (ok, message). Skipped when a proxy is configured (direct sockets may be blocked)."""
+    if os.environ.get("SKIP_REACHABILITY_CHECK"):
+        return True, "skipped (SKIP_REACHABILITY_CHECK set)"
+    if (cfg.get("browser", {}) or {}).get("proxy"):
+        return True, "skipped (proxy configured)"
+
+    parts = urlsplit(cfg["environment"]["base_url"])
+    host  = parts.hostname
+    port  = parts.port or (443 if parts.scheme == "https" else 80)
+    if not host:
+        return True, "skipped (no host in base_url)"
+
+    last_err = None
+    for _ in range(2):
+        try:
+            socket.create_connection((host, port), timeout=10).close()
+            return True, f"{host}:{port} reachable"
+        except OSError as e:
+            last_err = e
+    return False, f"{host}:{port} unreachable from this account: {last_err}"
+
 
 def pytest_sessionstart(session):
-    # 1) Reachability check: abort in seconds instead of 42 minutes
-    host = urlsplit(_CFG["environment"]["base_url"]).hostname
-    try:
-        socket.create_connection((host, 443), timeout=10).close()
-    except OSError as e:
-        pytest.exit(f"Server {host} unreachable from this account: {e}", returncode=2)
+    # 1) Fail fast: abort in seconds instead of burning 40+ minutes on reruns
+    ok, msg = _check_server_reachable(_CFG)
+    print(f"\n  [PRECHECK] {msg}")
+    if not ok:
+        pytest.exit(f"Aborting run — {msg}", returncode=2)
 
-    # 2) Your existing Excel summary update
+    # 2) Excel summary update
     try:
         import fix_summary
         fix_summary.fix()
@@ -511,9 +560,11 @@ def test_data():
 
 @pytest.fixture(scope="session")
 def browser(config):
-    browser_name  = (config.get("browser", {}).get("type") or "chromium").lower()
-    headless      = bool(config.get("browser", {}).get("headless", False))
-    slow_mo       = int(config.get("browser", {}).get("slow_mo", 0))
+    bcfg          = config.get("browser", {}) or {}
+    browser_name  = (bcfg.get("type") or "chromium").lower()
+    # Jenkins runs as a service with no desktop session, so always go headless there
+    headless      = bool(bcfg.get("headless", False)) or RUNNING_IN_JENKINS
+    slow_mo       = int(bcfg.get("slow_mo", 0))
     launch_kwargs = {"headless": headless, "slow_mo": slow_mo}
 
     if browser_name == "chrome":
@@ -521,13 +572,23 @@ def browser(config):
     elif browser_name == "msedge":
         launch_kwargs["channel"] = "msedge"
 
+    # Chromium ignores HTTP_PROXY env vars, so pass a proxy explicitly if one is needed
+    proxy = bcfg.get("proxy")
+    if proxy:
+        launch_kwargs["proxy"] = {"server": proxy}
+
+    print(f"\n  [BROWSER] {browser_name} headless={headless} proxy={proxy or 'none'}")
+
     p = sync_playwright().start()
+    b = None
     try:
-        b = getattr(p, browser_name if browser_name not in ("chrome", "msedge") else "chromium").launch(**launch_kwargs)
+        engine = browser_name if browser_name not in ("chrome", "msedge") else "chromium"
+        b = getattr(p, engine).launch(**launch_kwargs)
         yield b
     finally:
         try:
-            b.close()
+            if b is not None:
+                b.close()
         except Exception:
             pass
         try:
@@ -552,6 +613,8 @@ def url_for(base_url):
 @pytest.fixture(scope="module")
 def page(browser, config):
     """Authenticated page — logs in once per module, reused across all tests in that module."""
+    global _LOGIN_FAILURES
+
     record_video = VIDEO_ON
     ctx_kwargs   = {"ignore_https_errors": True}
     if record_video:
@@ -564,7 +627,22 @@ def page(browser, config):
     pg  = ctx.new_page()
     pg.set_default_timeout(config["browser"]["timeout"])
 
-    _do_login(pg, config)
+    try:
+        _do_login(pg, config)
+    except Exception:
+        _LOGIN_FAILURES += 1
+        try:
+            ctx.close()
+        except Exception:
+            pass
+        if _LOGIN_FAILURES >= MAX_LOGIN_FAILURES:
+            pytest.exit(
+                f"Aborting run — login failed {_LOGIN_FAILURES} times in a row "
+                "(server unreachable, wrong credentials, or login page changed).",
+                returncode=2,
+            )
+        raise
+    _LOGIN_FAILURES = 0
 
     time.sleep(2)
     try:
@@ -591,7 +669,13 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     report  = outcome.get_result()
 
-    if report.when != "call":
+    # Record the test body ("call") AND setup errors (e.g. login failed).
+    # Without the setup case, a dead login leaves stale results in Excel.
+    if report.when == "call":
+        pass
+    elif report.when == "setup" and report.failed:
+        pass
+    else:
         return
 
     tc_id  = _tc_id_from_name(item.name)
