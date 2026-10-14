@@ -3,7 +3,7 @@
 <!-- Replace this banner with a real project screenshot or diagram if desired. -->
 # Playwright Automation
 
-### Excel-Driven UI Test Automation 路 Broadcast Platform
+### Excel-Driven UI Test Automation  Broadcast Platform
 
 **Reliable regression testing with Python, Playwright, Pytest, Jenkins, Excel & Allure**
 
@@ -16,13 +16,13 @@
   <a href="https://github.com/iamgstomar/Playwright-Automation"><img src="https://img.shields.io/badge/Framework-Excel%20Driven-217346?style=for-the-badge&logo=microsoftexcel&logoColor=white" alt="Excel-driven framework"></a>
 </p>
 
-[Overview](#-overview) 路 [Features](#-highlights) 路 [Quick Start](#-quick-start) 路 [Run Tests](#-run-tests) 路 [Jenkins](#-jenkins-cicd)
+[Overview](#-overview)  [Features](#-highlights)  [Quick Start](#-quick-start)  [Run Tests](#-run-tests)  [Jenkins](#-jenkins-cicd)
 
 </div>
 
 ---
 
-## 鈿?Overview
+## Overview
 
 **Playwright Automation** is a Python-based UI testing framework for the **Puffin Broadcast Platform**. It combines browser automation with Excel-based test-case management and CI execution to make regression testing repeatable, traceable, and easier to maintain.
 
@@ -30,13 +30,13 @@ The workbook `QA_Test_Cases.xlsx` is the central test-case inventory. Pytest run
 
 > **Design principle:** Keep test cases traceable, browser checks repeatable, and reports aligned with the tests that actually ran.
 
-## 鉁?Highlights
+## Highlights
 
 <table>
 <tr>
 <td width="50%" valign="top">
 
-### 馃И Browser automation
+### Browser automation
 - Python + Playwright
 - Pytest test discovery and assertions
 - Shared fixtures and login helpers
@@ -45,7 +45,7 @@ The workbook `QA_Test_Cases.xlsx` is the central test-case inventory. Pytest run
 </td>
 <td width="50%" valign="top">
 
-### 馃搳 Excel-based test management
+###  Excel-based test management
 - `QA_Test_Cases.xlsx` as the test inventory
 - Module-specific worksheets
 - Execution status and actual-result updates
@@ -56,7 +56,7 @@ The workbook `QA_Test_Cases.xlsx` is the central test-case inventory. Pytest run
 <tr>
 <td width="50%" valign="top">
 
-### 馃殌 CI/CD with Jenkins
+###  CI/CD with Jenkins
 - Windows-based pipeline execution
 - Dependency and browser setup
 - Parameterized test selection when configured
@@ -75,7 +75,7 @@ The workbook `QA_Test_Cases.xlsx` is the central test-case inventory. Pytest run
 </tr>
 </table>
 
-## 馃攧 How it works
+##  How it works
 
 ```mermaid
 flowchart LR
@@ -98,7 +98,7 @@ flowchart LR
 4. **Record** execution results through the project's Excel reporting utilities.
 5. **Review** the pytest output, Excel summary, and Allure report data.
 
-## 馃О Technology stack
+##  Technology stack
 
 | Technology | Role |
 |---|---|
@@ -113,7 +113,7 @@ flowchart LR
 
 ---
 
-## 馃Л Test coverage
+##  Test coverage
 
 The current framework is organized into these application modules:
 
@@ -134,34 +134,34 @@ The current framework is organized into these application modules:
 
 The number of tests and their statuses can change between runs. Check the current workbook and Pytest collection output for the latest counts.
 
-## 馃梻锔?Repository map
+## Repository map
 
 ```text
 Playwright-Automation/
-鈹溾攢鈹€ config/
-鈹?  鈹斺攢鈹€ config.yaml                 # Environment configuration
-鈹溾攢鈹€ tests/
-鈹?  鈹溾攢鈹€ conftest.py                 # Shared fixtures and browser/login helpers
-鈹?  鈹溾攢鈹€ test_Departments.py         # Department tests
-鈹?  鈹斺攢鈹€ test_*.py                   # Other module suites
-鈹溾攢鈹€ tools/
-鈹?  鈹溾攢鈹€ generate_tests_from_excel.py
-鈹?  鈹溾攢鈹€ excel_to_allure.py          # Workbook results to Allure data
-鈹?  鈹斺攢鈹€ ...                         # Supporting tools
-鈹溾攢鈹€ utils/
-鈹?  鈹斺攢鈹€ excel_writer.py             # Excel result updates
-鈹溾攢鈹€ QA_Test_Cases.xlsx              # Central test-case workbook
-鈹溾攢鈹€ pytest.ini                      # Pytest options and markers
-鈹溾攢鈹€ requirements.txt                # Python dependencies
-鈹溾攢鈹€ Jenkinsfile                     # CI/CD pipeline
-鈹斺攢鈹€ README.md
+config/
+config.yaml                 # Environment configuration
+tests/
+conftest.py                 # Shared fixtures and browser/login helpers
+test_Departments.py         # Department tests
+test_*.py                   # Other module suites
+tools/
+generate_tests_from_excel.py
+excel_to_allure.py          # Workbook results to Allure data
+...                         # Supporting tools
+utils/
+excel_writer.py             # Excel result updates
+QA_Test_Cases.xlsx              # Central test-case workbook
+pytest.ini                      # Pytest options and markers
+requirements.txt                # Python dependencies
+Jenkinsfile                     # CI/CD pipeline
+README.md
 ```
 
 This is a guide to the principal paths discussed in the project. Check the current repository if files have been moved or renamed.
 
 ---
 
-## 馃殌 Quick start
+## Quick start
 
 ### 1. Prerequisites
 
@@ -237,7 +237,7 @@ A successful run should show the test as `PASSED` and a passing pytest summary.
 
 ---
 
-## 鈻讹笍 Run tests
+## Run tests
 
 Execute these commands from the repository root with the intended Python environment active.
 
@@ -314,7 +314,7 @@ A longer timeout can help diagnose slow CI agents, but investigate any test that
 | `--timeout=180` | Override the configured timeout |
 | `--alluredir=allure-results` | Write Allure result files |
 
-## 馃摌 Excel test-case management
+## Excel test-case management
 
 `QA_Test_Cases.xlsx` is the central test-case inventory. It includes a summary/index and module-specific worksheets.
 
@@ -350,7 +350,7 @@ The test ID should map consistently to the corresponding workbook ID (for exampl
 
 > **Keep Excel and code synchronized.** The workbook documents test cases and expected results; Python implements the executable checks. Never treat an unexecuted test as PASS.
 
-## 馃彈锔?Jenkins CI/CD
+## Jenkins CI/CD
 
 The repository's `Jenkinsfile` orchestrates automation execution and reporting in the configured Jenkins environment.
 
@@ -401,7 +401,7 @@ This example assumes the parameter exists and its values match markers in `pytes
 
 **Reporting integrity:** preserve the Pytest exit code and use results from the current run. An interrupted test, missing result, or timeout must not be reported as PASS merely because an older Excel value remains.
 
-## 馃搱 Allure reports
+## Allure reports
 
 ### Create Allure result files
 
@@ -437,7 +437,7 @@ Confirm the arguments supported by your checked-out script. After a timeout or i
 
 ---
 
-## 馃Н Troubleshooting
+## Troubleshooting
 
 <details>
 <summary><strong>Chromium executable is missing</strong></summary>
@@ -525,7 +525,7 @@ Run diagnostics in the same environment that produced the failure.
 
 ---
 
-## 馃攼 Security and quality guidelines
+## Security and quality guidelines
 
 - Use approved QA/UAT accounts and controlled test data.
 - Store secrets in Jenkins Credentials or an approved secret manager.
@@ -538,7 +538,7 @@ Run diagnostics in the same environment that produced the failure.
 - Validate reports against the actual Pytest output.
 - Keep dependencies and browser versions reproducible across developer and CI machines.
 
-## 馃椇锔?Roadmap
+## Roadmap
 
 Possible future improvements鈥攏ot claims of existing functionality鈥攊nclude:
 
@@ -549,7 +549,7 @@ Possible future improvements鈥攏ot claims of existing functionality鈥攊nclud
 - Broader regression coverage across application modules.
 - More robust CI artifact retention and notification handling.
 
-## 馃 Contributing
+## Contributing
 
 1. Follow the existing naming and marker conventions.
 2. Update the corresponding Excel test case.
