@@ -31,7 +31,7 @@ browser:
   # chromium | firefox | webkit
   type: "chromium"
   # Run with a visible browser window (false) or in the background (true)
-  headless: false
+  headless: true
   # Slows down each action by this many milliseconds - useful while building/debugging tests
   slow_mo: 150
   # Default timeout (ms) for waiting on elements/pages
