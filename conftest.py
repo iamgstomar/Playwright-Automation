@@ -475,7 +475,18 @@ def _screenshot_path(tc_id: str, module: str) -> str:
 
 # ── Session start ─────────────────────────────────────────────────────────────
 
+import socket
+from urllib.parse import urlsplit
+
 def pytest_sessionstart(session):
+    # 1) Reachability check: abort in seconds instead of 42 minutes
+    host = urlsplit(_CFG["environment"]["base_url"]).hostname
+    try:
+        socket.create_connection((host, 443), timeout=10).close()
+    except OSError as e:
+        pytest.exit(f"Server {host} unreachable from this account: {e}", returncode=2)
+
+    # 2) Your existing Excel summary update
     try:
         import fix_summary
         fix_summary.fix()
