@@ -24,7 +24,7 @@
 
 ## Overview
 
-**Playwright Automation** is a Python-based UI testing framework for the **Puffin Broadcast Platform**. It combines browser automation with Excel-based test-case management and CI execution to make regression testing repeatable, traceable, and easier to maintain.
+**Playwright Automation** is a Python-based UI testing framework for the **Broadcast Platform**. It combines browser automation with Excel-based test-case management and CI execution to make regression testing repeatable, traceable, and easier to maintain.
 
 The workbook `QA_Test_Cases.xlsx` is the central test-case inventory. Pytest runs the implemented test functions, Playwright drives the browser, and the project's reporting utilities update Excel and prepare Allure results.
 
@@ -540,7 +540,7 @@ Run diagnostics in the same environment that produced the failure.
 
 ## Roadmap
 
-Possible future improvements鈥攏ot claims of existing functionality鈥攊nclude:
+Possible future improvements to claims of existing functionality Include:
 
 - Test execution trends and historical reporting.
 - Stronger consistency checks between Pytest, Excel, and Allure.
