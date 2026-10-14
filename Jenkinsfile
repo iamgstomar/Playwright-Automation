@@ -1,4 +1,3 @@
-
 pipeline {
     agent any
 
@@ -35,6 +34,7 @@ pipeline {
 
     triggers {
         // Runs nightly at 2 AM according to Jenkins timezone.
+        // NOTE: scheduled runs use the FIRST choice of MODULE (Departments).
         cron('0 2 * * *')
     }
 
@@ -63,6 +63,15 @@ pipeline {
                         if errorlevel 1 exit /b 1
                     '''
                 }
+
+                // Diagnostic: show where this run will read/write the Excel file and screenshots.
+                // If excel_path is an absolute D:\ path, test results never reach the workspace
+                // QA_Test_Cases.xlsx that excel_to_allure.py reads. Use: excel_path: QA_Test_Cases.xlsx
+                bat '''
+                    echo ---- paths used by this run ----
+                    findstr /I /C:"excel_path" /C:"screenshot_dir" "config\\config.yaml"
+                    exit /b 0
+                '''
 
                 bat '''
                     echo Checking Python installation...
@@ -128,38 +137,48 @@ pipeline {
             steps {
                 echo "Running tests for module: ${params.MODULE}"
 
+                // Start from an empty results folder so the report only contains THIS run.
+                // (Deletes files only; sub-folders such as history are kept.)
                 bat '''
                     if not exist "%ALLURE_RESULTS%" mkdir "%ALLURE_RESULTS%"
-
-                    if /I "%MODULE%"=="ALL" (
-                        "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%"
-                        if errorlevel 1 exit /b 1
-                    ) else if /I "%MODULE%"=="Departments" (
-                        "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%" -m "departments"
-                        if errorlevel 1 exit /b 1
-                    ) else if /I "%MODULE%"=="Login" (
-                        "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%" -m "login"
-                        if errorlevel 1 exit /b 1
-                    ) else (
-                        echo ERROR: Unsupported module "%MODULE%"
-                        exit /b 1
-                    )
+                    del /Q "%ALLURE_RESULTS%\\*" 2>nul
+                    exit /b 0
                 '''
-            }
 
-            post {
-                always {
-                    echo 'Updating Excel and generating Allure test results'
-
+                // catchError marks the build FAILED if pytest fails, but lets the
+                // report steps below (and Publish Report) still run.
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                     bat '''
+                        if /I "%MODULE%"=="ALL" (
+                            "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%"
+                            if errorlevel 1 exit /b 1
+                        ) else if /I "%MODULE%"=="Departments" (
+                            "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%" -m "departments"
+                            if errorlevel 1 exit /b 1
+                        ) else if /I "%MODULE%"=="Login" (
+                            "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%" -m "login"
+                            if errorlevel 1 exit /b 1
+                        ) else (
+                            echo ERROR: Unsupported module "%MODULE%"
+                            exit /b 1
+                        )
+                    '''
+                }
+
+                echo 'Updating Excel and generating Allure test results'
+
+                // Convert ONLY the selected module's sheet (was: --all for every run)
+                script {
+                    def sheetArg = (params.MODULE == 'ALL') ? '--all' : "--sheet \"${params.MODULE}\""
+                    bat """
                         if not exist "%VENV_DIR%\\Scripts\\python.exe" (
                             echo ERROR: Python virtual environment not found.
                             exit /b 1
                         )
 
-                        "%VENV_DIR%\\Scripts\\python.exe" tools\\excel_to_allure.py --all --label "%LABEL%"
+                        "%VENV_DIR%\\Scripts\\python.exe" tools\\excel_to_allure.py ${sheetArg} --label "%LABEL%"
                         if errorlevel 1 exit /b 1
-                    '''
+                    """
                 }
             }
         }
