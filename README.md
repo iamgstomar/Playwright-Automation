@@ -1,7 +1,7 @@
 <div align="center">
 
 <!-- Replace this banner with a real project screenshot or diagram if desired. -->
-# 馃幁 Playwright Automation
+# Playwright Automation
 
 ### Excel-Driven UI Test Automation 路 Puffin Broadcast Platform
 
