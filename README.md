@@ -572,8 +572,8 @@ ci: align Playwright browser installation
 
 ### Built for repeatable QA and dependable regression feedback.
 
-**[猸?Explore the repository](https://github.com/iamgstomar/Playwright-Automation)**
+**[Explore the repository](https://github.com/iamgstomar/Playwright-Automation)**
 
-<sub>Excel-driven test management 路 Browser automation 路 CI execution 路 Reporting</sub>
+<sub>Excel-driven test management  Browser automation  CI execution  Reporting</sub>
 
 </div>
