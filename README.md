@@ -65,7 +65,7 @@ The workbook `QA_Test_Cases.xlsx` is the central test-case inventory. Pytest run
 </td>
 <td width="50%" valign="top">
 
-### 馃搱 Reporting and diagnostics
+### Reporting and diagnostics
 - Allure result generation
 - PASS / FAIL / BLOCKED / SKIPPED tracking
 - Configurable test timeouts and reruns
@@ -150,10 +150,10 @@ excel_to_allure.py          # Workbook results to Allure data
 ...                         # Supporting tools
 utils/
 excel_writer.py             # Excel result updates
-QA_Test_Cases.xlsx              # Central test-case workbook
-pytest.ini                      # Pytest options and markers
-requirements.txt                # Python dependencies
-Jenkinsfile                     # CI/CD pipeline
+QA_Test_Cases.xlsx          # Central test-case workbook
+pytest.ini                  # Pytest options and markers
+requirements.txt            # Python dependencies
+Jenkinsfile                 # CI/CD pipeline
 README.md
 ```
 
@@ -322,10 +322,10 @@ A longer timeout can help diagnose slow CI agents, but investigate any test that
 
 The reporting workflow supports result categories such as:
 
-- **PASS** 鈥?the test passed.
-- **FAIL** 鈥?the test failed.
-- **BLOCKED** 鈥?execution could not proceed.
-- **SKIPPED** 鈥?the test was intentionally not run.
+- **PASS** the test passed.
+- **FAIL** the test failed.
+- **BLOCKED** execution could not proceed.
+- **SKIPPED** the test was intentionally not run.
 
 Depending on the test and reporting path, the workbook can also capture **Actual Result**, **Tested By**, and **Date Tested**.
 
