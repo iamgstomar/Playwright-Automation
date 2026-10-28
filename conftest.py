@@ -359,7 +359,7 @@ def _do_login(pg: Page, config) -> None:
                     ['pass','pwd','password'].some(k => t.includes(k)));
                 return hasUser && hasPass;
             }""",
-            timeout=timeout,
+            timeout=nav_timeout,
         )
     except Exception:
         # If the wait times out, try anyway — maybe the form is already there
@@ -401,7 +401,7 @@ def _do_login(pg: Page, config) -> None:
     try:
         pg.wait_for_url(
             lambda url: "/login" not in url.lower(),
-            timeout=timeout,
+            timeout=nav_timeout,
         )
     except Exception:
         # URL didn't change — check if there's an error message on the page
@@ -629,16 +629,22 @@ def page(browser, config):
 
     try:
         _do_login(pg, config)
-    except Exception:
+    except Exception as e:
         _LOGIN_FAILURES += 1
+        # Capture what the browser saw BEFORE closing it, so the console shows the real cause
+        try:
+            body = pg.inner_text("body", timeout=3000)[:200].replace("\n", " ")
+            detail = f"url={pg.url!r} title={pg.title()!r} body={body!r}"
+        except Exception:
+            detail = "page state unavailable"
         try:
             ctx.close()
         except Exception:
             pass
         if _LOGIN_FAILURES >= MAX_LOGIN_FAILURES:
             pytest.exit(
-                f"Aborting run — login failed {_LOGIN_FAILURES} times in a row "
-                "(server unreachable, wrong credentials, or login page changed).",
+                f"Aborting run — login failed {_LOGIN_FAILURES} times in a row. "
+                f"Last error: {e!r} | {detail}",
                 returncode=2,
             )
         raise
@@ -681,8 +687,13 @@ def pytest_runtest_makereport(item, call):
     tc_id  = _tc_id_from_name(item.name)
     module = _module_folder(tc_id) if tc_id else "Unknown"
     failed = report.failed
-    actual = str(call.excinfo.value)[:300] if call.excinfo else ""
-    status = "Fail" if failed else "Pass"
+    skipped = report.skipped
+    actual = (
+        str(getattr(report, "wasxfail", report.longrepr))[:300]
+        if skipped
+        else str(call.excinfo.value)[:300] if call.excinfo else ""
+    )
+    status = "Blocked" if skipped else "Fail" if failed else "Pass"
 
     pg = item.funcargs.get("page") or item.funcargs.get("auth_page")
 
