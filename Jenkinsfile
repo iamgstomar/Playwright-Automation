@@ -97,7 +97,7 @@ pipeline {
                     "%VENV_PYTHON%" -m pip install --upgrade pip
                     if errorlevel 1 exit /b 1
 
-                    echo Installing dependencies...
+                    echo Installing project dependencies...
                     "%VENV_PYTHON%" -m pip install -r requirements.txt
                     if errorlevel 1 exit /b 1
 
@@ -109,79 +109,80 @@ pipeline {
                     "%VENV_PYTHON%" -m pytest --version
                     if errorlevel 1 exit /b 1
 
-                    echo Python environment setup completed.
+                    echo Python environment setup completed successfully.
                 '''
             }
         }
 
         stage('Run Selected Tests') {
             steps {
-                script {
-                    echo "Selected module: ${params.MODULE}"
+                echo "Selected module: ${params.MODULE}"
 
-                    bat '''
-                        echo Preparing Allure results directory...
+                bat '''
+                    echo Preparing Allure results directory...
 
-                        if not exist "%ALLURE_RESULTS%" mkdir "%ALLURE_RESULTS%"
+                    if not exist "%ALLURE_RESULTS%" mkdir "%ALLURE_RESULTS%"
 
-                        powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '%ALLURE_RESULTS%') { Get-ChildItem '%ALLURE_RESULTS%' -File | Remove-Item -Force; Get-ChildItem '%ALLURE_RESULTS%' -Directory | Where-Object { $_.Name -ne 'history' } | Remove-Item -Recurse -Force }"
+                    powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '%ALLURE_RESULTS%') { Get-ChildItem '%ALLURE_RESULTS%' -File | Remove-Item -Force; Get-ChildItem '%ALLURE_RESULTS%' -Directory | Where-Object { $_.Name -ne 'history' } | Remove-Item -Recurse -Force }"
 
-                        if errorlevel 1 exit /b 1
+                    if errorlevel 1 exit /b 1
 
-                        echo ========================================
-                        echo Selected module: %MODULE%
-                        echo ========================================
+                    echo ========================================
+                    echo Selected module: %MODULE%
+                    echo ========================================
 
-                        if "%MODULE%"=="Departments" (
-                            set "TEST_FILENAME=test_Departments.py"
-                            goto RUN_SELECTED_TEST
-                        )
+                    if "%MODULE%"=="ALL" (
+                        echo Executing all pytest test files...
 
-                        if "%MODULE%"=="Login" (
-                            set "TEST_FILENAME=test_login.py"
-                            goto RUN_SELECTED_TEST
-                        )
-
-                        if "%MODULE%"=="ALL" (
-                            echo Executing all pytest test files...
-                            "%VENV_PYTHON%" -m pytest -v --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
-                            exit /b %ERRORLEVEL%
-                        )
-
-                        echo Invalid module selected: %MODULE%
-                        exit /b 1
-
-                        :RUN_SELECTED_TEST
-
-                        echo Searching for %TEST_FILENAME%...
-
-                        set "TEST_FILE="
-
-                        for /f "delims=" %%F in ('powershell -NoProfile -Command "Get-ChildItem -Path . -Filter '%TEST_FILENAME%' -File -Recurse | Where-Object { $_.FullName -notmatch '\\(venv|.git|.pytest_cache|__pycache__|allure-results|allure-report)\\' } | Select-Object -First 1 -ExpandProperty FullName"') do set "TEST_FILE=%%F"
-
-                        if not defined TEST_FILE (
-                            echo ERROR: Test file %TEST_FILENAME% was not found.
-                            exit /b 1
-                        )
-
-                        echo Executing selected test file:
-                        echo %TEST_FILE%
-
-                        "%VENV_PYTHON%" -m pytest -v "%TEST_FILE%" --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
+                        "%VENV_PYTHON%" -m pytest -v --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
 
                         exit /b %ERRORLEVEL%
-                    '''
-                }
+                    )
+
+                    if "%MODULE%"=="Departments" (
+                        set "TEST_FILENAME=test_Departments.py"
+                    ) else if "%MODULE%"=="Login" (
+                        set "TEST_FILENAME=test_login.py"
+                    ) else (
+                        echo ERROR: Invalid module selected: %MODULE%
+                        exit /b 1
+                    )
+
+                    echo Searching for %TEST_FILENAME%...
+
+                    set "TEST_FILE="
+
+                    for /r %%F in (%TEST_FILENAME%) do (
+                        if exist "%%F" (
+                            set "TEST_FILE=%%F"
+                            goto TEST_FILE_FOUND
+                        )
+                    )
+
+                    echo ERROR: %TEST_FILENAME% was not found.
+                    exit /b 1
+
+                    :TEST_FILE_FOUND
+
+                    echo ========================================
+                    echo Selected test file:
+                    echo %TEST_FILE%
+                    echo ========================================
+
+                    "%VENV_PYTHON%" -m pytest -v "%TEST_FILE%" --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
+
+                    exit /b %ERRORLEVEL%
+                '''
             }
         }
 
         stage('Publish Allure Report') {
             steps {
-                echo 'Publishing Allure report from pytest execution results...'
+                echo 'Publishing Allure report from pytest results...'
 
                 script {
                     if (!fileExists(env.ALLURE_RESULTS)) {
-                        error 'Allure results directory was not created.'
+                        error 'Allure results directory does not exist.'
                     }
 
                     allure([
@@ -207,7 +208,7 @@ pipeline {
         }
 
         failure {
-            echo 'QA Automation pipeline failed. Please check the Jenkins console output.'
+            echo 'QA Automation pipeline failed. Check Jenkins console output.'
         }
 
         always {
