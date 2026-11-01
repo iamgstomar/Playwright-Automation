@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -30,18 +31,29 @@ pipeline {
         timestamps()
         timeout(time: 60, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '20'))
-    }
-
-    triggers {
-        // Runs nightly at 2 AM according to Jenkins timezone.
-        // NOTE: scheduled runs use the FIRST choice of MODULE (Departments).
-        cron('0 2 * * *')
+        skipDefaultCheckout(true)
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Checkout Latest Code') {
             steps {
+                echo 'Checking out the configured GitHub branch...'
+
                 checkout scm
+
+                echo 'Removing obsolete untracked files from Jenkins workspace...'
+
+                bat '''
+                    git clean -fd
+                    if errorlevel 1 exit /b 1
+
+                    echo ---- Current Git status ----
+                    git status --short
+
+                    echo ---- Latest Git commit ----
+                    git log -1 --oneline
+                '''
             }
         }
 
@@ -64,11 +76,8 @@ pipeline {
                     '''
                 }
 
-                // Diagnostic: show where this run will read/write the Excel file and screenshots.
-                // If excel_path is an absolute D:\ path, test results never reach the workspace
-                // QA_Test_Cases.xlsx that excel_to_allure.py reads. Use: excel_path: QA_Test_Cases.xlsx
                 bat '''
-                    echo ---- paths used by this run ----
+                    echo ---- Paths used by this run ----
                     findstr /I /C:"excel_path" /C:"screenshot_dir" "config\\config.yaml"
                     exit /b 0
                 '''
@@ -137,16 +146,13 @@ pipeline {
             steps {
                 echo "Running tests for module: ${params.MODULE}"
 
-                // Start from an empty results folder so the report only contains THIS run.
-                // (Deletes files only; sub-folders such as history are kept.)
+                // Clear previous Allure result files for this execution.
                 bat '''
                     if not exist "%ALLURE_RESULTS%" mkdir "%ALLURE_RESULTS%"
                     del /Q "%ALLURE_RESULTS%\\*" 2>nul
                     exit /b 0
                 '''
 
-                // catchError marks the build FAILED if pytest fails, but lets the
-                // report steps below (and Publish Report) still run.
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
                     bat '''
                         if /I "%MODULE%"=="ALL" (
@@ -167,9 +173,11 @@ pipeline {
 
                 echo 'Updating Excel and generating Allure test results'
 
-                // Convert ONLY the selected module's sheet (was: --all for every run)
                 script {
-                    def sheetArg = (params.MODULE == 'ALL') ? '--all' : "--sheet \"${params.MODULE}\""
+                    def sheetArg = (params.MODULE == 'ALL')
+                        ? '--all'
+                        : "--sheet \"${params.MODULE}\""
+
                     bat """
                         if not exist "%VENV_DIR%\\Scripts\\python.exe" (
                             echo ERROR: Python virtual environment not found.
