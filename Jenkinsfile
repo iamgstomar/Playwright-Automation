@@ -14,18 +14,6 @@ pipeline {
             choices: ['Departments', 'Login', 'ALL'],
             description: 'Select the test module to execute'
         )
-
-        string(
-            name: 'LABEL',
-            defaultValue: '',
-            description: 'Optional label for Allure reporting'
-        )
-
-        booleanParam(
-            name: 'REPORT_ONLY',
-            defaultValue: false,
-            description: 'Generate Allure report from Excel without executing tests'
-        )
     }
 
     environment {
@@ -42,7 +30,7 @@ pipeline {
 
         stage('Checkout Latest Code') {
             steps {
-                echo 'Checking out the latest source code...'
+                echo 'Checking out latest source code...'
 
                 checkout scm
 
@@ -53,7 +41,7 @@ pipeline {
                     echo Cleaning untracked workspace files...
                     git clean -fd
 
-                    echo Git working tree status:
+                    echo Git status:
                     git status
                 '''
             }
@@ -61,7 +49,7 @@ pipeline {
 
         stage('Setup Environment') {
             steps {
-                echo 'Setting up Python environment and project dependencies...'
+                echo 'Setting up Python environment...'
 
                 withCredentials([
                     file(credentialsId: 'qa-config-yaml', variable: 'CONFIG_FILE'),
@@ -70,11 +58,11 @@ pipeline {
                     bat '''
                         if not exist "config" mkdir "config"
 
-                        echo Copying application configuration...
+                        echo Copying configuration file...
                         copy /Y "%CONFIG_FILE%" "config\\config.yaml"
                         if errorlevel 1 exit /b 1
 
-                        echo Copying QA test cases workbook...
+                        echo Copying QA test workbook...
                         copy /Y "%EXCEL_FILE%" "QA_Test_Cases.xlsx"
                         if errorlevel 1 exit /b 1
                     '''
@@ -90,8 +78,7 @@ pipeline {
                     if exist "%VENV_DIR%" (
                         "%VENV_PYTHON%" -m pip --version >nul 2>&1
                         if errorlevel 1 (
-                            echo Existing virtual environment is invalid.
-                            echo Recreating virtual environment...
+                            echo Removing invalid virtual environment...
                             rmdir /S /Q "%VENV_DIR%"
                         )
                     )
@@ -102,10 +89,6 @@ pipeline {
                         if errorlevel 1 exit /b 1
                     )
 
-                    echo Checking virtual environment Python...
-                    "%VENV_PYTHON%" --version
-                    if errorlevel 1 exit /b 1
-
                     echo Initializing pip...
                     "%VENV_PYTHON%" -m ensurepip --upgrade
                     if errorlevel 1 exit /b 1
@@ -114,7 +97,7 @@ pipeline {
                     "%VENV_PYTHON%" -m pip install --upgrade pip
                     if errorlevel 1 exit /b 1
 
-                    echo Installing project dependencies...
+                    echo Installing dependencies...
                     "%VENV_PYTHON%" -m pip install -r requirements.txt
                     if errorlevel 1 exit /b 1
 
@@ -122,91 +105,83 @@ pipeline {
                     "%VENV_PYTHON%" -m playwright install chromium
                     if errorlevel 1 exit /b 1
 
-                    echo Verifying pytest installation...
+                    echo Verifying pytest...
                     "%VENV_PYTHON%" -m pytest --version
                     if errorlevel 1 exit /b 1
 
-                    echo Python environment setup completed successfully.
+                    echo Python environment setup completed.
                 '''
             }
         }
 
-        stage('Run Tests') {
-            when {
-                expression {
-                    return !params.REPORT_ONLY
-                }
-            }
-
+        stage('Run Selected Tests') {
             steps {
-                echo "Executing ${params.MODULE} test cases..."
+                script {
+                    echo "Selected module: ${params.MODULE}"
 
-                catchError(
-                    buildResult: 'UNSTABLE',
-                    stageResult: 'FAILURE'
-                ) {
                     bat '''
+                        echo Preparing Allure results directory...
+
                         if not exist "%ALLURE_RESULTS%" mkdir "%ALLURE_RESULTS%"
 
-                        echo Removing previous Allure execution results...
-
-                        powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-                        "$p = '%ALLURE_RESULTS%'; ^
-                         if (Test-Path $p) { ^
-                             Get-ChildItem -Path $p -File | Remove-Item -Force; ^
-                             Get-ChildItem -Path $p -Directory | Where-Object { $_.Name -ne 'history' } | Remove-Item -Recurse -Force ^
-                         }"
+                        powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '%ALLURE_RESULTS%') { Get-ChildItem '%ALLURE_RESULTS%' -File | Remove-Item -Force; Get-ChildItem '%ALLURE_RESULTS%' -Directory | Where-Object { $_.Name -ne 'history' } | Remove-Item -Recurse -Force }"
 
                         if errorlevel 1 exit /b 1
 
+                        echo ========================================
+                        echo Selected module: %MODULE%
+                        echo ========================================
+
+                        if "%MODULE%"=="Departments" (
+                            set "TEST_FILENAME=test_Departments.py"
+                            goto RUN_SELECTED_TEST
+                        )
+
+                        if "%MODULE%"=="Login" (
+                            set "TEST_FILENAME=test_login.py"
+                            goto RUN_SELECTED_TEST
+                        )
+
                         if "%MODULE%"=="ALL" (
+                            echo Executing all pytest test files...
                             "%VENV_PYTHON%" -m pytest -v --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
-                        ) else if "%MODULE%"=="Departments" (
-                            "%VENV_PYTHON%" -m pytest -v -m "departments" --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
-                        ) else if "%MODULE%"=="Login" (
-                            "%VENV_PYTHON%" -m pytest -v -m "login" --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
-                        ) else (
-                            echo Invalid MODULE parameter: %MODULE%
+                            exit /b %ERRORLEVEL%
+                        )
+
+                        echo Invalid module selected: %MODULE%
+                        exit /b 1
+
+                        :RUN_SELECTED_TEST
+
+                        echo Searching for %TEST_FILENAME%...
+
+                        set "TEST_FILE="
+
+                        for /f "delims=" %%F in ('powershell -NoProfile -Command "Get-ChildItem -Path . -Filter '%TEST_FILENAME%' -File -Recurse | Where-Object { $_.FullName -notmatch '\\(venv|.git|.pytest_cache|__pycache__|allure-results|allure-report)\\' } | Select-Object -First 1 -ExpandProperty FullName"') do set "TEST_FILE=%%F"
+
+                        if not defined TEST_FILE (
+                            echo ERROR: Test file %TEST_FILENAME% was not found.
                             exit /b 1
                         )
 
-                        if errorlevel 1 exit /b 1
+                        echo Executing selected test file:
+                        echo %TEST_FILE%
+
+                        "%VENV_PYTHON%" -m pytest -v "%TEST_FILE%" --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
+
+                        exit /b %ERRORLEVEL%
                     '''
                 }
             }
         }
 
-        stage('Generate Allure Results from Excel') {
-            when {
-                expression {
-                    return params.REPORT_ONLY
-                }
-            }
-
-            steps {
-                echo "Generating Allure results from Excel for ${params.MODULE}..."
-
-                bat '''
-                    if not exist "%ALLURE_RESULTS%" mkdir "%ALLURE_RESULTS%"
-
-                    if "%MODULE%"=="ALL" (
-                        "%VENV_PYTHON%" tools\\excel_to_allure.py --all --label "%LABEL%"
-                    ) else (
-                        "%VENV_PYTHON%" tools\\excel_to_allure.py --sheet "%MODULE%" --label "%LABEL%"
-                    )
-
-                    if errorlevel 1 exit /b 1
-                '''
-            }
-        }
-
         stage('Publish Allure Report') {
             steps {
-                echo 'Publishing Allure report...'
+                echo 'Publishing Allure report from pytest execution results...'
 
                 script {
                     if (!fileExists(env.ALLURE_RESULTS)) {
-                        error 'Allure results directory does not exist.'
+                        error 'Allure results directory was not created.'
                     }
 
                     allure([
@@ -224,85 +199,27 @@ pipeline {
     post {
 
         success {
-            echo 'Puffin QA Automation completed successfully.'
-
-            emailext(
-                to: '$DEFAULT_RECIPIENTS',
-                subject: "SUCCESS: ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
-                body: """
-Hello Team,
-
-Puffin QA Automation execution completed successfully.
-
-Build Details:
-Job: ${env.JOB_NAME}
-Build Number: ${env.BUILD_NUMBER}
-Selected Module: ${params.MODULE}
-Report Only: ${params.REPORT_ONLY}
-Build Status: PASSED
-
-Allure Report:
-${env.BUILD_URL}allure/
-
-Build URL:
-${env.BUILD_URL}
-
-Regards,
-QA Automation
-"""
-            )
-        }
-
-        failure {
-            echo 'Puffin QA Automation failed.'
-
-            emailext(
-                to: '$DEFAULT_RECIPIENTS',
-                subject: "FAILED: ${env.JOB_NAME} - Build #${env.BUILD_NUMBER}",
-                body: """
-Hello Team,
-
-Puffin QA Automation execution failed.
-
-Build Details:
-Job: ${env.JOB_NAME}
-Build Number: ${env.BUILD_NUMBER}
-Selected Module: ${params.MODULE}
-Report Only: ${params.REPORT_ONLY}
-Build Status: FAILED
-
-Please review the Jenkins console output and Allure report.
-
-Console Output:
-${env.BUILD_URL}console
-
-Allure Report:
-${env.BUILD_URL}allure/
-
-Build URL:
-${env.BUILD_URL}
-
-Regards,
-QA Automation
-"""
-            )
+            echo 'QA Automation completed successfully.'
         }
 
         unstable {
-            echo 'Puffin QA Automation completed with test failures or unstable results.'
+            echo 'QA Automation completed with test failures.'
+        }
+
+        failure {
+            echo 'QA Automation pipeline failed. Please check the Jenkins console output.'
         }
 
         always {
-            echo 'Performing Jenkins workspace cleanup...'
+            echo 'Cleaning Python virtual environment...'
 
             bat '''
                 if exist "%VENV_DIR%" (
-                    echo Removing Python virtual environment...
                     rmdir /S /Q "%VENV_DIR%"
                 )
-
-                echo Virtual environment cleanup completed.
             '''
+
+            echo 'Cleanup completed.'
         }
     }
 }
