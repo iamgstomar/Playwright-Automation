@@ -1,3 +1,14 @@
+// ============================================================================
+// MODULE REGISTRY
+// To add a new module in the future:
+//   1. Add one line here          ->  'ModuleName': 'test_file_name.py'
+//   2. Add the same name to the MODULE parameter 'value' list below
+// Nothing else in this pipeline needs to change.
+// ============================================================================
+def MODULE_TESTS = [
+    'Departments': 'test_Departments.py',
+    'Login'      : 'test_login.py'
+]
 
 pipeline {
     agent any
@@ -9,10 +20,16 @@ pipeline {
     }
 
     parameters {
-        choice(
+        // Multi-select checkboxes (requires the "Extended Choice Parameter" plugin).
+        // Keep 'value' in sync with MODULE_TESTS above (ALL must stay last).
+        extendedChoice(
             name: 'MODULE',
-            choices: ['Departments', 'Login', 'ALL'],
-            description: 'Select the test module to execute'
+            type: 'PT_CHECKBOX',
+            value: 'Departments,Login,ALL',
+            defaultValue: 'ALL',
+            multiSelectDelimiter: ',',
+            visibleItemCount: 10,
+            description: 'Select the test module(s) to execute'
         )
     }
 
@@ -118,6 +135,7 @@ pipeline {
             steps {
                 echo "Selected module: ${params.MODULE}"
 
+                // Prepare Allure results directory (unchanged)
                 bat '''
                     echo Preparing Allure results directory...
 
@@ -130,49 +148,67 @@ pipeline {
                     echo ========================================
                     echo Selected module: %MODULE%
                     echo ========================================
+                '''
 
-                    if "%MODULE%"=="ALL" (
-                        echo Executing all pytest test files...
+                script {
+                    // Parse the (possibly comma-separated) selection
+                    def selected = (params.MODULE ?: '')
+                        .split(',')
+                        .collect { it.trim() }
+                        .findAll { it }
+                        .unique()
 
-                        "%VENV_PYTHON%" -m pytest -v --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
+                    if (selected.isEmpty()) {
+                        error 'No module selected. Please select at least one module or ALL.'
+                    }
+
+                    def pytestTargets = ''   // empty = run all pytest test files
+
+                    if (selected.contains('ALL')) {
+                        echo 'ALL selected - executing all pytest test files...'
+                    } else {
+                        // Validate every selected module against the registry
+                        def invalid = selected.findAll { !MODULE_TESTS.containsKey(it) }
+                        if (!invalid.isEmpty()) {
+                            error "Invalid module(s) selected: ${invalid.join(', ')}. " +
+                                  "Valid modules: ${MODULE_TESTS.keySet().join(', ')}, ALL"
+                        }
+
+                        // Locate each test file anywhere in the workspace (same behaviour as before)
+                        def resolved = []
+                        for (m in selected) {
+                            def fileName = MODULE_TESTS[m]
+                            echo "Searching for ${fileName}..."
+
+                            def found = bat(
+                                script: "@echo off\ndir /s /b \"${fileName}\" 2>nul\nexit /b 0",
+                                returnStdout: true
+                            ).trim()
+
+                            if (!found) {
+                                error "${fileName} was not found."
+                            }
+
+                            def firstMatch = found.readLines()[0].trim()
+                            echo "Module ${m} -> ${firstMatch}"
+                            resolved << "\"${firstMatch}\""
+                        }
+
+                        pytestTargets = resolved.join(' ')
+                    }
+
+                    echo '========================================'
+                    echo "Modules to run : ${selected.join(', ')}"
+                    echo "Pytest targets : ${pytestTargets ?: '(all tests)'}"
+                    echo '========================================'
+
+                    // Single pytest run => one combined Allure report
+                    bat """
+                        "%VENV_PYTHON%" -m pytest -v ${pytestTargets} --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
 
                         exit /b %ERRORLEVEL%
-                    )
-
-                    if "%MODULE%"=="Departments" (
-                        set "TEST_FILENAME=test_Departments.py"
-                    ) else if "%MODULE%"=="Login" (
-                        set "TEST_FILENAME=test_login.py"
-                    ) else (
-                        echo ERROR: Invalid module selected: %MODULE%
-                        exit /b 1
-                    )
-
-                    echo Searching for %TEST_FILENAME%...
-
-                    set "TEST_FILE="
-
-                    for /r %%F in (%TEST_FILENAME%) do (
-                        if exist "%%F" (
-                            set "TEST_FILE=%%F"
-                            goto TEST_FILE_FOUND
-                        )
-                    )
-
-                    echo ERROR: %TEST_FILENAME% was not found.
-                    exit /b 1
-
-                    :TEST_FILE_FOUND
-
-                    echo ========================================
-                    echo Selected test file:
-                    echo %TEST_FILE%
-                    echo ========================================
-
-                    "%VENV_PYTHON%" -m pytest -v "%TEST_FILE%" --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
-
-                    exit /b %ERRORLEVEL%
-                '''
+                    """
+                }
             }
         }
 
