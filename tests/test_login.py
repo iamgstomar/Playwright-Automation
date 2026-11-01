@@ -335,21 +335,6 @@ def test_TC_LOG_007_valid_credentials_authenticate_user(login_page, test_data, c
     assert not _on_login_page(login_page), "Valid credentials should leave the Login page"
 
 
-@pytest.mark.skip(reason="Manually verified; excluded from automated runs per request.")
-def test_TC_LOG_011_inactive_session_expires_after_two_minutes(
-    login_page, test_data, config
-):
-    username, password = _login_values(test_data, "valid", config)
-    _authenticate(login_page, username, password)
-    protected_url = login_page.url
-    assert not _on_login_page(login_page), "A protected page is required for the session-timeout test"
-    login_page.wait_for_timeout(120000)
-    login_page.goto(protected_url, wait_until="domcontentloaded")
-    assert _on_login_page(login_page), (
-        "An inactive session should expire after the configured two-minute timeout"
-    )
-
-
 def test_TC_LOG_008_invalid_credentials_are_rejected(login_page, test_data, config):
     username, password = _login_values(test_data, "invalid", config)
     _submit_unrecognized_credentials(login_page, username, password)
@@ -371,3 +356,18 @@ def test_TC_LOG_010_login_page_works_at_supported_viewports(login_page):
         assert login_page.locator(":focus").count() == 1, (
             f"Keyboard focus should remain visible at viewport {width}x{height}"
         )
+
+
+@pytest.mark.skip(reason="Manually verified; excluded from automated runs per request.")
+def test_TC_LOG_011_inactive_session_expires_after_two_minutes(
+    login_page, test_data, config
+):
+    username, password = _login_values(test_data, "valid", config)
+    _authenticate(login_page, username, password)
+    protected_url = login_page.url
+    assert not _on_login_page(login_page), "A protected page is required for the session-timeout test"
+    login_page.wait_for_timeout(120000)
+    login_page.goto(protected_url, wait_until="domcontentloaded")
+    assert _on_login_page(login_page), (
+        "An inactive session should expire after the configured two-minute timeout"
+    )
