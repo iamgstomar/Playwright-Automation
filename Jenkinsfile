@@ -15,6 +15,7 @@ pipeline {
 
     options {
         skipDefaultCheckout(true)
+        disableConcurrentBuilds()
         timeout(time: 60, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '20'))
     }
@@ -26,7 +27,7 @@ pipeline {
             name: 'MODULE',
             type: 'PT_MULTI_SELECT',
             value: 'Departments,Login,ALL',
-            defaultValue: 'Departments',
+            defaultValue: 'ALL',
             multiSelectDelimiter: ',',
             visibleItemCount: 5,
             description: 'Select the test module(s) to execute (Ctrl+click to select more than one)'
@@ -202,12 +203,24 @@ pipeline {
                     echo "Pytest targets : ${pytestTargets ?: '(all tests)'}"
                     echo '========================================'
 
-                    // Single pytest run => one combined Allure report
-                    bat """
-                        "%VENV_PYTHON%" -m pytest -v ${pytestTargets} --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
+                    // Show run details in the Allure Overview "Environment" widget
+                    writeFile file: "${env.ALLURE_RESULTS}/environment.properties", text: """\
+Selected.Modules=${selected.join(', ')}
+Test.Files=${selected.contains('ALL') ? 'All test files' : selected.collect { MODULE_TESTS[it] }.join(', ')}
+Jenkins.Build=#${env.BUILD_NUMBER}
+Reruns=2
+"""
 
-                        exit /b %ERRORLEVEL%
-                    """
+                    // Single pytest run => one combined Allure report
+                    // Test failures mark the build UNSTABLE (not FAILED) so the
+                    // Allure report is still published after a failing run.
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                        bat """
+                            "%VENV_PYTHON%" -m pytest -v ${pytestTargets} --alluredir="%ALLURE_RESULTS%" --reruns 2 --reruns-delay 3
+
+                            exit /b %ERRORLEVEL%
+                        """
+                    }
                 }
             }
         }
