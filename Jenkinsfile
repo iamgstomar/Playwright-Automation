@@ -2,7 +2,7 @@
 // MODULE REGISTRY
 // To add a new module in the future:
 //   1. Add one line here          ->  'ModuleName': 'test_file_name.py'
-//   2. Add a matching booleanParam with the same name in 'parameters' below
+//   2. Add the same name to the MODULE parameter 'value' list below
 // Nothing else in this pipeline needs to change.
 // ============================================================================
 def MODULE_TESTS = [
@@ -20,10 +20,17 @@ pipeline {
     }
 
     parameters {
-        // One checkbox per module. Names must match the keys in MODULE_TESTS above.
-        booleanParam(name: 'Departments', defaultValue: false, description: 'Run Departments tests')
-        booleanParam(name: 'Login',       defaultValue: false, description: 'Run Login tests')
-        booleanParam(name: 'ALL',         defaultValue: false, description: 'Run ALL tests (overrides the module checkboxes above)')
+        // Single MODULE field with multi-select (requires the "Extended Choice Parameter" plugin).
+        // Keep 'value' in sync with MODULE_TESTS above (ALL must stay last).
+        extendedChoice(
+            name: 'MODULE',
+            type: 'PT_MULTI_SELECT',
+            value: 'Departments,Login,ALL',
+            defaultValue: 'Departments',
+            multiSelectDelimiter: ',',
+            visibleItemCount: 5,
+            description: 'Select the test module(s) to execute (Ctrl+click to select more than one)'
+        )
     }
 
     environment {
@@ -126,12 +133,7 @@ pipeline {
 
         stage('Run Selected Tests') {
             steps {
-                script {
-                    // Build the MODULE value (e.g. "Departments,Login") from the checkboxes
-                    def picked = MODULE_TESTS.keySet().findAll { params[it] }
-                    env.MODULE = params.ALL ? 'ALL' : picked.join(',')
-                }
-                echo "Selected module: ${env.MODULE}"
+                echo "Selected module: ${params.MODULE}"
 
                 // Prepare Allure results directory (unchanged)
                 bat '''
@@ -150,7 +152,7 @@ pipeline {
 
                 script {
                     // Parse the (possibly comma-separated) selection
-                    def selected = (env.MODULE ?: '')
+                    def selected = (params.MODULE ?: '')
                         .split(',')
                         .collect { it.trim() }
                         .findAll { it }
