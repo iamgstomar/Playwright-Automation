@@ -1,0 +1,182 @@
+[1mdiff --git a/Jenkinsfile b/Jenkinsfile[m
+[1mindex e8193bc..2bf7a99 100644[m
+[1m--- a/Jenkinsfile[m
+[1m+++ b/Jenkinsfile[m
+[36m@@ -8,23 +8,25 @@[m [mpipeline {[m
+             choices: ['Departments', 'Login', 'ALL'],[m
+             description: 'Which module to test'[m
+         )[m
+[32m+[m
+         string([m
+             name: 'LABEL',[m
+             defaultValue: '',[m
+             description: 'Build label shown in Allure Trend. Leave blank for auto.'[m
+         )[m
+[32m+[m
+         booleanParam([m
+             name: 'REPORT_ONLY',[m
+             defaultValue: false,[m
+[31m-            description: 'Skip pytest and regenerate report from Excel'[m
+[32m+[m[32m            description: 'Skip pytest and regenerate the Allure report from Excel'[m
+         )[m
+     }[m
+ [m
+     environment {[m
+[32m+[m[32m        PYTHON_HOME   = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313'[m
+[32m+[m[32m        VENV_PYTHON   = 'venv\\Scripts\\python.exe'[m
+         ALLURE_RESULTS = 'allure-results'[m
+         ALLURE_REPORT  = 'allure-report'[m
+[31m-        VENV_DIR       = 'venv'[m
+[31m-        PYTHON_EXE     = 'C:\\Users\\Dell\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'[m
+     }[m
+ [m
+     options {[m
+[36m@@ -38,29 +40,23 @@[m [mpipeline {[m
+ [m
+         stage('Checkout Latest Code') {[m
+             steps {[m
+[31m-                echo 'Checking out the configured GitHub branch...'[m
+[31m-[m
+                 checkout scm[m
+ [m
+[31m-                echo 'Removing obsolete untracked files from Jenkins workspace...'[m
+[31m-[m
+                 bat '''[m
+[32m+[m[32m                    echo ===== Git Revision =====[m
+[32m+[m[32m                    git log -1 --oneline[m
+[32m+[m
+[32m+[m[32m                    echo ===== Cleaning Untracked Files =====[m
+                     git clean -fd[m
+[31m-                    if errorlevel 1 exit /b 1[m
+ [m
+[31m-                    echo ---- Current Git status ----[m
+[32m+[m[32m                    echo ===== Git Status =====[m
+                     git status --short[m
+[31m-[m
+[31m-                    echo ---- Latest Git commit ----[m
+[31m-                    git log -1 --oneline[m
+                 '''[m
+             }[m
+         }[m
+ [m
+[31m-        stage('Setup') {[m
+[32m+[m[32m        stage('Setup Environment') {[m
+             steps {[m
+[31m-                echo 'Setting up Python environment and QA files'[m
+[31m-[m
+                 withCredentials([[m
+                     file(credentialsId: 'qa-config-yaml', variable: 'CONFIG_FILE'),[m
+                     file(credentialsId: 'qa-excel', variable: 'EXCEL_FILE')[m
+[36m@@ -68,6 +64,7 @@[m [mpipeline {[m
+                     bat '''[m
+                         if not exist "config" mkdir "config"[m
+ [m
+[32m+[m[32m                        echo Updating Jenkins configuration files...[m
+                         copy /Y "%CONFIG_FILE%" "config\\config.yaml"[m
+                         if errorlevel 1 exit /b 1[m
+ [m
+[36m@@ -77,154 +74,104 @@[m [mpipeline {[m
+                 }[m
+ [m
+                 bat '''[m
+[31m-                    echo ---- Paths used by this run ----[m
+[31m-                    findstr /I /C:"excel_path" /C:"screenshot_dir" "config\\config.yaml"[m
+[31m-                    exit /b 0[m
+[31m-                '''[m
+[31m-[m
+[31m-                bat '''[m
+[31m-                    echo Checking Python installation...[m
+[31m-[m
+[31m-                    if not exist "%PYTHON_EXE%" ([m
+[31m-                        echo ERROR: Python executable not found: %PYTHON_EXE%[m
+[31m-                        exit /b 1[m
+[31m-                    )[m
+[31m-[m
+[31m-                    "%PYTHON_EXE%" --version[m
+[31m-                    if errorlevel 1 exit /b 1[m
+[31m-[m
+[31m-                    echo Recreating Python virtual environment...[m
+[31m-[m
+[31m-                    if exist "%VENV_DIR%" ([m
+[31m-                        rmdir /S /Q "%VENV_DIR%"[m
+[32m+[m[32m                    if not exist "%VENV_PYTHON%" ([m
+[32m+[m[32m                        echo Creating Python virtual environment...[m
+[32m+[m[32m                        "%PYTHON_HOME%\\python.exe" -m venv venv[m
+                         if errorlevel 1 exit /b 1[m
+                     )[m
+ [m
+[31m-                    "%PYTHON_EXE%" -m venv "%VENV_DIR%"[m
+[31m-                    if errorlevel 1 exit /b 1[m
+[31m-[m
+[31m-                    echo Repairing pip installation...[m
+[31m-[m
+[31m-                    "%VENV_DIR%\\Scripts\\python.exe" -m ensurepip --upgrade[m
+[31m-                    if errorlevel 1 exit /b 1[m
+[31m-[m
+[31m-                    echo Verifying pip...[m
+[31m-[m
+[31m-                    "%VENV_DIR%\\Scripts\\python.exe" -m pip --version[m
+[31m-                    if errorlevel 1 exit /b 1[m
+[31m-[m
+[31m-                    echo Upgrading pip...[m
+[32m+[m[32m                    "%VENV_PYTHON%" --version[m
+ [m
+[31m-                    "%VENV_DIR%\\Scripts\\python.exe" -m pip install --upgrade pip[m
+[32m+[m[32m                    "%VENV_PYTHON%" -m pip install --upgrade pip[m
+                     if errorlevel 1 exit /b 1[m
+ [m
+[31m-                    echo Installing project dependencies...[m
+[31m-[m
+[31m-                    "%VENV_DIR%\\Scripts\\python.exe" -m pip install -r requirements.txt[m
+[31m-                    if errorlevel 1 exit /b 1[m
+[31m-[m
+[31m-                    echo Verifying pytest installation...[m
+[31m-[m
+[31m-                    "%VENV_DIR%\\Scripts\\python.exe" -m pytest --version[m
+[32m+[m[32m                    "%VENV_PYTHON%" -m pip install -r requirements.txt[m
+                     if errorlevel 1 exit /b 1[m
+ [m
+[31m-                    echo Installing Playwright Chromium...[m
+[31m-[m
+[31m-                    "%VENV_DIR%\\Scripts\\python.exe" -m playwright install chromium[m
+[32m+[m[32m                    "%VENV_PYTHON%" -m playwright install chromium[m
+                     if errorlevel 1 exit /b 1[m
+[31m-[m
+[31m-                    echo Python environment setup completed successfully.[m
+                 '''[m
+             }[m
+         }[m
+ [m
+         stage('Run Tests') {[m
+             when {[m
+[31m-                expression { return !params.REPORT_ONLY }[m
+[32m+[m[32m                expression { !params.REPORT_ONLY }[m
+             }[m
+ [m
+             steps {[m
+[31m-                echo "Running tests for module: ${params.MODULE}"[m
+[31m-[m
+[31m-                // Clear previous Allure result files for this execution.[m
+[31m-                bat '''[m
+[31m-                    if not exist "%ALLURE_RESULTS%" mkdir "%ALLURE_RESULTS%"[m
+[31m-                    del /Q "%ALLURE_RESULTS%\\*" 2>nul[m
+[31m-                    exit /b 0[m
+[31m-                '''[m
+[31m-[m
+[31m-                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {[m
+[32m+[m[32m                script {[m
+[32m+[m[32m                    // Start with a completely fresh pytest Allure results directory.[m
+                     bat '''[m
+[31m-                        if /I "%MODULE%"=="ALL" ([m
+[31m-                            "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%"[m
+[31m-                            if errorlevel 1 exit /b 1[m
+[31m-                        ) else if /I "%MODULE%"=="Departments" ([m
+[31m-                            "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%" -m "departments"[m
+[31m-                            if errorlevel 1 exit /b 1[m
+[31m-                        ) else if /I "%MODULE%"=="Login" ([m
+[31m-                            "%VENV_DIR%\\Scripts\\python.exe" -m pytest -v --alluredir="%ALLURE_RESULTS%" -m "login"[m
+[31m-                            if errorlevel 1 exit /b 1[m
+[31m-                        ) else ([m
+[31m-                            echo ERROR: Unsupported module "%MODULE%"[m
+[31m-                            exit /b 1[m
+[32m+
