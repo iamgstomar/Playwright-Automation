@@ -2,7 +2,7 @@
 // MODULE REGISTRY
 // To add a new module in the future:
 //   1. Add one line here          ->  'ModuleName': 'test_file_name.py'
-//   2. Add the same name to the MODULE parameter 'value' list below
+//   2. Add a matching booleanParam with the same name in 'parameters' below
 // Nothing else in this pipeline needs to change.
 // ============================================================================
 def MODULE_TESTS = [
@@ -20,17 +20,10 @@ pipeline {
     }
 
     parameters {
-        // Multi-select checkboxes (requires the "Extended Choice Parameter" plugin).
-        // Keep 'value' in sync with MODULE_TESTS above (ALL must stay last).
-        extendedChoice(
-            name: 'MODULE',
-            type: 'PT_CHECKBOX',
-            value: 'Departments,Login,ALL',
-            defaultValue: 'ALL',
-            multiSelectDelimiter: ',',
-            visibleItemCount: 10,
-            description: 'Select the test module(s) to execute'
-        )
+        // One checkbox per module. Names must match the keys in MODULE_TESTS above.
+        booleanParam(name: 'Departments', defaultValue: false, description: 'Run Departments tests')
+        booleanParam(name: 'Login',       defaultValue: false, description: 'Run Login tests')
+        booleanParam(name: 'ALL',         defaultValue: false, description: 'Run ALL tests (overrides the module checkboxes above)')
     }
 
     environment {
@@ -133,7 +126,12 @@ pipeline {
 
         stage('Run Selected Tests') {
             steps {
-                echo "Selected module: ${params.MODULE}"
+                script {
+                    // Build the MODULE value (e.g. "Departments,Login") from the checkboxes
+                    def picked = MODULE_TESTS.keySet().findAll { params[it] }
+                    env.MODULE = params.ALL ? 'ALL' : picked.join(',')
+                }
+                echo "Selected module: ${env.MODULE}"
 
                 // Prepare Allure results directory (unchanged)
                 bat '''
@@ -152,7 +150,7 @@ pipeline {
 
                 script {
                     // Parse the (possibly comma-separated) selection
-                    def selected = (params.MODULE ?: '')
+                    def selected = (env.MODULE ?: '')
                         .split(',')
                         .collect { it.trim() }
                         .findAll { it }
